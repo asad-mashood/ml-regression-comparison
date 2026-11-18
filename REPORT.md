@@ -106,6 +106,12 @@ As extra checks, the report also gives **training R²** (to diagnose over- and u
 
 ## 5. The six algorithms
 
+> [!IMPORTANT]
+> **Handwritten Mathematical Implementation & Step-by-Step Derivations:**  
+> In accordance with the assignment specifications, full handwritten mathematical procedures, theoretical loss formulations, and complete step-by-step numerical calculations on a sample dataset are documented in:  
+> **👉 [HANDWRITTEN_DERIVATIONS.md](HANDWRITTEN_DERIVATIONS.md)**
+
+
 | Model | Key equation | Settings used |
 |---|---|---|
 | Linear Regression | $\hat y=\beta_0+\sum_j\beta_jx_j$, $\boldsymbol\beta=(X^TX)^{-1}X^T\mathbf y$ | Ordinary Least Squares |
