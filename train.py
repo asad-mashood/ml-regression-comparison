@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold, cross_val_score
 
-from src.data_preprocessing import (RANDOM_STATE, add_features, describe_dataset,
+from src.data_preprocessing import (RANDOM_STATE, TARGET, add_features, describe_dataset,
                                     get_train_test, load_data)
 from src.evaluate import regression_metrics
 from src.models import MODEL_ORDER, build_pipeline, get_pipelines
@@ -58,6 +58,12 @@ def main(run_cv: bool = True):
     X_train, X_test, y_train, y_test = get_train_test()
     print(f"Train: {X_train.shape}, Test: {X_test.shape}  (80:20 split, random_state={RANDOM_STATE})")
 
+    # Save the exact training and test sets used by every model
+    X_train.assign(**{TARGET: y_train}).to_csv(ROOT / "data" / "train.csv", index_label="row_id")
+    X_test.assign(**{TARGET: y_test}).to_csv(ROOT / "data" / "test.csv", index_label="row_id")
+    viz.plot_data_split(y_train, y_test, FIG_DIR / "data_split.png")
+    viz.plot_geo(load_data(), FIG_DIR / "eda_geo_prices.png")
+
     viz.plot_eda(add_features(load_data()), FIG_DIR / "eda_correlation.png",
                  FIG_DIR / "eda_target.png")
 
@@ -67,7 +73,7 @@ def main(run_cv: bool = True):
     viz.plot_knn_k(ks, k_rmse, best_k, FIG_DIR / "knn_k_selection.png")
     print(f"  best k = {best_k}")
 
-    rows, preds, fitted = [], {}, {}
+    rows, preds, train_preds, fitted = [], {}, {}, {}
     for name, pipe in get_pipelines(knn_k=best_k).items():
         print(f"Training {name} ...")
         t0 = time.perf_counter()
@@ -76,7 +82,8 @@ def main(run_cv: bool = True):
 
         y_pred = pipe.predict(X_test)
         test_m = regression_metrics(y_test, y_pred)
-        train_r2 = regression_metrics(y_train, pipe.predict(X_train))["R2"]
+        train_preds[name] = pipe.predict(X_train)
+        train_r2 = regression_metrics(y_train, train_preds[name])["R2"]
         row = {"Model": name, **test_m, "Train R2": train_r2, "Train time (s)": train_time}
 
         if run_cv:
@@ -104,7 +111,13 @@ def main(run_cv: bool = True):
     (RESULTS_DIR / "metrics.md").write_text("\n".join(md) + "\n")
 
     pd.DataFrame({"actual": y_test.values, **{n: preds[n] for n in MODEL_ORDER}},
-                 index=y_test.index).to_csv(RESULTS_DIR / "test_predictions.csv", float_format="%.2f")
+                 index=y_test.index).to_csv(RESULTS_DIR / "test_predictions.csv", float_format="%.2f",
+                                            index_label="row_id")
+    pd.DataFrame({"actual": y_train.values, **{n: train_preds[n] for n in MODEL_ORDER}},
+                 index=y_train.index).to_csv(RESULTS_DIR / "train_predictions.csv", float_format="%.2f",
+                                             index_label="row_id")
+    err_tbl = viz.error_by_price_range(y_test, preds)
+    err_tbl.to_csv(RESULTS_DIR / "error_by_price_range.csv", float_format="%.2f")
 
     # Feature importances of the tree ensembles
     imps = {}
@@ -118,8 +131,22 @@ def main(run_cv: bool = True):
     viz.plot_metric_bars(metrics, FIG_DIR / "metrics_comparison.png")
     viz.plot_residuals(y_test, preds, FIG_DIR / "residuals.png")
     viz.plot_sample_predictions(y_test, preds, FIG_DIR / "sample_predictions.png")
+    viz.plot_train_vs_test(metrics, FIG_DIR / "train_vs_test_r2.png")
+    if run_cv:
+        viz.plot_cv(metrics, FIG_DIR / "cross_validation_rmse.png")
+    viz.plot_error_by_price(err_tbl, FIG_DIR / "error_by_price_range.png")
+    viz.plot_abs_error_box(y_test, preds, FIG_DIR / "abs_error_boxplot.png")
+    viz.plot_nn_loss(fitted["Neural Network"].named_steps["model"].regressor_, FIG_DIR / "nn_training_curve.png")
+    feat_names = [n.split("__", 1)[1] for n in fitted["Decision Tree"].named_steps["preprocess"].get_feature_names_out()]
+    scaler = fitted["Decision Tree"].named_steps["preprocess"].named_transformers_["num"].named_steps["scaler"]
+    viz.plot_tree_top(fitted["Decision Tree"].named_steps["model"], feat_names, scaler.mean_, scaler.scale_,
+                      len(scaler.mean_), FIG_DIR / "decision_tree_top_levels.png")
+    lin = fitted["Linear Regression"].named_steps["model"]
+    pd.Series(lin.coef_, index=feat_names).to_csv(RESULTS_DIR / "linear_regression_coefficients.csv", header=["coefficient"])
+    viz.plot_linear_coefficients(pd.Series(lin.coef_, index=feat_names), FIG_DIR / "linear_coefficients.png")
 
     best = ranked.index[0]
+    viz.plot_error_map(X_test, y_test, preds[best], best, FIG_DIR / "best_model_error_map.png")
     summary = {"dataset": info, "split": {"train": len(X_train), "test": len(X_test)},
                "knn_best_k": best_k, "best_model": best,
                "metrics": metrics.round(6).reset_index().to_dict(orient="records")}

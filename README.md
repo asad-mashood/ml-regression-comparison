@@ -5,6 +5,8 @@ House price prediction on the **California Housing** dataset with six regression
 1. **Handwritten:** working procedure, equations and a step-by-step numeric solution on a small sample → [`handwritten/HANDWRITTEN_SOLUTION.md`](handwritten/HANDWRITTEN_SOLUTION.md) ([PDF](handwritten/HANDWRITTEN_SOLUTION.pdf))
 2. **Python:** a full implementation on all 20,640 districts → [`train.py`](train.py), [`regression_comparison.ipynb`](regression_comparison.ipynb)
 
+**Full illustrated report (18 figures, all tables, analysis and conclusion): [`REPORT.md`](REPORT.md)** ([PDF](REPORT.pdf))
+
 | # | Algorithm | Library |
 |---|---|---|
 | 1 | Linear Regression | `sklearn.linear_model.LinearRegression` |
@@ -16,9 +18,9 @@ House price prediction on the **California Housing** dataset with six regression
 
 ## Results
 
-**Best model: XGBoost.** It has the highest R² (0.857) and the lowest MAE ($28,009), MSE and RMSE ($43,228) on the test set.
+**Best model: XGBoost.** It has the highest R² (0.857) and the lowest MAE (\$28,009), MSE and RMSE (\$43,228) on the test set.
 
-| Rank | Model | MAE ($) | MSE ($²) | RMSE ($) | R² | Train R² | 5-fold CV RMSE ($) | Train time (s) |
+| Rank | Model | MAE (USD) | MSE (USD²) | RMSE (USD) | R² | Train R² | 5-fold CV RMSE (USD) | Train time (s) |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|
 | 1 | **XGBoost** | **28,009** | **1.869e+09** | **43,228** | **0.8574** | 0.9806 | 44,669 ± 780 | 1.48 |
 | 2 | Random Forest | 31,628 | 2.375e+09 | 48,739 | 0.8187 | 0.9402 | 49,431 ± 1,042 | 3.28 |
@@ -37,9 +39,14 @@ House price prediction on the **California Housing** dataset with six regression
 ### Metric comparison
 ![Metrics](results/figures/metrics_comparison.png)
 
-### Residuals and feature importance
-![Residuals](results/figures/residuals.png)
+### Over-fitting check and error by price range
+![Train vs test](results/figures/train_vs_test_r2.png)
+![Error by price range](results/figures/error_by_price_range.png)
+
+### Feature importance
 ![Feature importance](results/figures/feature_importance.png)
+
+More figures (EDA, map, decision tree, neural-network training curve, cross-validation, residuals, error map) are in [`REPORT.md`](REPORT.md).
 
 ## Experimental setup (identical for all six models)
 
@@ -77,7 +84,7 @@ Scaling is required for KNN, because it uses distances, and for the Neural Netwo
 | **XGBoost** | Each tree corrects the previous trees' errors. L2 regularisation, shrinkage and subsampling control overfitting. The `hist` algorithm is fast and it handles missing values natively. | Many hyper-parameters. Train R² (0.98) is far above test R² (0.86), so it would overfit further without regularisation. It is less interpretable. |
 | **KNN** | Simple, no training phase, naturally non-linear | Must scale features. Prediction is slow on big data. Accuracy suffers from the curse of dimensionality (16 inputs). It memorises the training set: train R² is 1.0 because each point is its own nearest neighbour. |
 
-All models share one weakness: the target is **capped at $500,001** (965 districts). This is the vertical column of points at the right edge of every scatter plot, and no model can predict those districts correctly.
+All models share one weakness: the target is **capped at \$500,001** (965 districts). This is the vertical column of points at the right edge of every scatter plot, and no model can predict those districts correctly.
 
 ## Conclusion: why XGBoost wins
 
@@ -94,7 +101,10 @@ The Neural Network can in principle learn the same function, but on tabular data
 
 ```
 ml-regression-comparison/
-├── data/housing.csv                    California Housing dataset
+├── data/
+│   ├── housing.csv                     California Housing dataset (full, 20,640 rows)
+│   ├── train.csv                       the exact 80% training set (16,512 rows)
+│   └── test.csv                        the exact 20% test set (4,128 rows)
 ├── src/
 │   ├── data_preprocessing.py           load, feature engineering, 80:20 split, scaler/encoder
 │   ├── models.py                       the six models (as Pipelines)
@@ -102,13 +112,18 @@ ml-regression-comparison/
 │   └── visualize.py                    all figures
 ├── train.py                            trains, evaluates and saves everything
 ├── predict.py                          loads saved models and predicts new districts
+├── make_report.py                      builds REPORT.md / REPORT.pdf from the results
+├── REPORT.md / REPORT.pdf              full illustrated report
 ├── regression_comparison.ipynb         executed notebook (full walkthrough)
 ├── models/*.joblib                     the 6 trained models (preprocessing included)
 ├── results/
 │   ├── metrics.csv / metrics.md        comparison table
 │   ├── summary.json                    run summary
 │   ├── test_predictions.csv            actual vs predicted for every test row
-│   └── figures/*.png
+│   ├── train_predictions.csv           actual vs predicted for every training row
+│   ├── error_by_price_range.csv        MAE per price band for every model
+│   ├── linear_regression_coefficients.csv
+│   └── figures/*.png                   18 figures
 └── handwritten/
     ├── HANDWRITTEN_SOLUTION.md / .pdf  step-by-step hand solutions of all 6 algorithms
     └── hand_calculations.py            generates & verifies every hand-calculated number
@@ -123,6 +138,7 @@ pip install -r requirements.txt
 
 python train.py                  # trains all 6 models, writes models/ and results/ (~1 min)
 python train.py --no-cv          # faster, skips cross-validation
+python make_report.py            # rebuild REPORT.md / REPORT.pdf from the results
 python predict.py                # predict example districts with every saved model
 python handwritten/hand_calculations.py   # regenerate the handwritten solution
 jupyter notebook regression_comparison.ipynb
